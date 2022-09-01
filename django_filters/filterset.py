@@ -5,6 +5,7 @@ from django import forms
 from django.db import models
 from django.db.models.constants import LOOKUP_SEP
 from django.db.models.fields.related import ManyToManyRel, ManyToOneRel, OneToOneRel
+from django.db.models.query import RawQuerySet
 
 from .conf import settings
 from .constants import ALL_FIELDS
@@ -209,10 +210,13 @@ class BaseFilterSet:
         This method should be overridden if additional filtering needs to be
         applied to the queryset before it is cached.
         """
+        if isinstance(queryset, RawQuerySet):
+            return queryset
+
         for name, value in self.form.cleaned_data.items():
             queryset = self.filters[name].filter(queryset, value)
             assert isinstance(
-                queryset, models.QuerySet
+                queryset, (models.QuerySet, RawQuerySet)
             ), "Expected '%s.%s' to return a QuerySet, but got a %s instead." % (
                 type(self).__name__,
                 name,
@@ -223,7 +227,10 @@ class BaseFilterSet:
     @property
     def qs(self):
         if not hasattr(self, "_qs"):
-            qs = self.queryset.all()
+            if isinstance(self.queryset, RawQuerySet):
+                qs = self.queryset
+            else:
+                qs = self.queryset.all()
             if self.is_bound:
                 # ensure form validation before filtering
                 self.errors
